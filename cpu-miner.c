@@ -101,6 +101,7 @@ enum algos {
 	ALGO_LYRA2,       /* Lyra2RE */
 	ALGO_LYRA2REV2,   /* Lyra2REv2 (Vertcoin) */
 	ALGO_MYR_GR,      /* Myriad Groestl */
+	ALGO_NIGHTCAP,    /* Cloverhash */
 	ALGO_NIST5,       /* Nist5 */
 	ALGO_PENTABLAKE,  /* Pentablake */
 	ALGO_PLUCK,       /* Pluck (Supcoin) */
@@ -156,6 +157,7 @@ static const char *algo_names[] = {
 	"lyra2re",
 	"lyra2rev2",
 	"myr-gr",
+	"nightcap",
 	"nist5",
 	"pentablake",
 	"pluck",
@@ -1878,6 +1880,9 @@ static void *miner_thread(void *userdata)
 	time_t tm_rate_log = 0;
 	time_t firstwork_time = 0;
 	unsigned char *scratchbuf = NULL;
+	char *cache = NULL;
+	char *dag = NULL;
+	unsigned char seed[32];
 	char s[16];
 	int i;
 
@@ -1933,6 +1938,19 @@ static void *miner_thread(void *userdata)
 						opt_affinity);
 			affine_to_cpu_mask(thr_id, (unsigned long)opt_affinity);
 		}
+	}
+
+	if (opt_algo == ALGO_NIGHTCAP) {
+		sph_blake256_context     ctx_blake;
+		for(size_t i = 0; i < (unsigned long)floor(work.height/200.0); i++) {
+			sph_blake256_init(&ctx_blake);
+		        sph_blake256 (&ctx_blake, seed, 32);
+			sph_blake256_close(&ctx_blake, seed);
+		}
+		cache = mkcache(get_cache_size(work.height), seed);
+		applog(LOG_DEBUG, "Cache loaded on thread %d.", thr_id);
+		dag = calc_full_dataset(cache, get_full_size(work.height), get_cache_size(work.height));
+		applog(LOG_DEBUG, "Created datsets on thread %d.", thr_id);
 	}
 
 	if (opt_algo == ALGO_SCRYPT) {
@@ -2249,6 +2267,9 @@ static void *miner_thread(void *userdata)
 		case ALGO_NEOSCRYPT:
 			rc = scanhash_neoscrypt(thr_id, &work, max_nonce, &hashes_done,
 				0x80000020 | (opt_nfactor << 8));
+			break;
+		case ALGO_NIGHTCAP:
+			rc = scanhash_nightcap(thr_id, &work, max_nonce, &hashes_done, dag);
 			break;
 		case ALGO_NIST5:
 			rc = scanhash_nist5(thr_id, &work, max_nonce, &hashes_done);
@@ -2849,6 +2870,8 @@ void parse_arg(int key, char *arg)
 				i = opt_algo = ALGO_JHA;
 			else if (!strcasecmp("lyra2", arg))
 				i = opt_algo = ALGO_LYRA2;
+			else if (!strcasecmp("nightcap", arg))
+				i = opt_algo = ALGO_NIGHTCAP;
 			else if (!strcasecmp("lyra2v2", arg))
 				i = opt_algo = ALGO_LYRA2REV2;
 			else if (!strcasecmp("scryptjane", arg))

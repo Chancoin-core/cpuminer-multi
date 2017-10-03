@@ -2,6 +2,7 @@
 #define __MINER_H__
 
 #include <cpuminer-config.h>
+#include "sha3/sph_blake.h"
 
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 #define MAX_CPUS 16
@@ -197,6 +198,10 @@ void sha256_transform_8way(uint32_t *state, const uint32_t *block, int swap);
 #endif
 
 struct work;
+unsigned long get_cache_size(unsigned long block_number);
+unsigned long get_full_size(unsigned long block_number);
+char* mkcache(unsigned long size, char *seed);
+char* calc_full_dataset(char *cache, unsigned long dataset_size, unsigned long cache_size);
 
 int scanhash_axiom(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
 int scanhash_bastion(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
@@ -221,6 +226,7 @@ int scanhash_lyra2(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *
 int scanhash_lyra2rev2(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
 int scanhash_myriad(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
 int scanhash_neoscrypt(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done, uint32_t profile);
+int scanhash_nightcap(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done, char *dag);
 int scanhash_nist5(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
 int scanhash_pentablake(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
 int scanhash_pluck(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done,
