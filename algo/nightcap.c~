@@ -162,8 +162,8 @@ struct CHashimotoResult {
     uint32_t result[8];
 };
 
-struct CHashimotoResult hashimoto(uint8_t *blockToHash, char *dag, unsigned full_size) {
-    uint64_t n = floor(full_size / HASH_BYTES);
+struct CHashimotoResult hashimoto(uint8_t *blockToHash, char *dag) {
+    uint64_t n = floor(get_full_size(*(unsigned long*)(blockToHash + 96)) / HASH_BYTES);
     uint64_t w = floor(MIX_BYTES / WORD_BYTES);
     uint64_t mixhashes = MIX_BYTES / WORD_BYTES;
     uint8_t header[80];
@@ -210,7 +210,6 @@ int scanhash_nightcap(int thr_id, struct work *work, uint32_t max_nonce, uint64_
 	const uint32_t Htarg = ptarget[7];
 	const uint32_t first_nonce = pdata[19];
 	uint32_t nonce = first_nonce;
-	unsigned long full_size = get_full_size(work->height);
 	if (opt_benchmark)
 		ptarget[7] = 0x0000ff;
 
@@ -219,7 +218,7 @@ int scanhash_nightcap(int thr_id, struct work *work, uint32_t max_nonce, uint64_
 	}
 	do {
 		be32enc(&endiandata[19], nonce);
-		struct CHashimotoResult res = hashimoto(endiandata, dag, full_size);
+		struct CHashimotoResult res = hashimoto(endiandata, dag);
 		be32enc(&endiandata[20], res.cmix[0]);
 		be32enc(&endiandata[21], res.cmix[1]);
 		be32enc(&endiandata[22], res.cmix[2]);
