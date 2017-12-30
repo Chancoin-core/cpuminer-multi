@@ -1,4 +1,5 @@
 #include <memory.h>
+#include <math.h>
 
 #include "sha3/sph_blake.h"
 #include "sha3/sph_cubehash.h"
@@ -16,7 +17,7 @@
 #define CACHE_BYTES_INIT 8388608
 #define CACHE_BYTES_GROWTH 196608
 #define EPOCH_LENGTH 400
-#define CACHE_MULTIPLIER 1024
+#define CACHE_MULTIPLIER 64
 #define MIX_BYTES 64
 #define HASH_BYTES 32
 #define DATASET_PARENTS 256
@@ -27,7 +28,7 @@
 inline int is_prime(unsigned long number) {
     if (number <= 1) return false;
     if((number % 2 == 0) && number > 2) return false;
-    for(unsigned long i = 3; i < number / 2; i += 2) {
+    for(unsigned long i = 3; i < sqrt(number); i += 2) {
         if(number % i == 0)
             return false;
     }
@@ -39,7 +40,7 @@ inline unsigned int fnv(unsigned int v1, unsigned int v2) {
 }
 
 unsigned long get_cache_size(unsigned long block_number) {
-    unsigned long sz = CACHE_BYTES_INIT + (CACHE_BYTES_GROWTH * round(sqrt(6*floor(((float)block_number / (float)EPOCH_LENGTH)))));
+    unsigned long sz = CACHE_BYTES_INIT + (CACHE_BYTES_GROWTH * round(sqrt(6*(block_number / EPOCH_LENGTH))));
     sz -= HASH_BYTES;
     while (!is_prime(sz / HASH_BYTES)) {
         sz -= 2 * HASH_BYTES;
@@ -59,16 +60,16 @@ unsigned long get_full_size(unsigned long block_number) {
 uint32_t* mkcache(unsigned long size, char *seed){
     uint64_t items = size / HASH_BYTES;
     sph_blake256_context ctx_blake;
-    uint32_t *cache = (char*)malloc(size);
+    uint32_t *cache = malloc(size);
     int64_t hashwords = HASH_BYTES / WORD_BYTES;
     sph_blake256_context ctx;
     sph_blake256_init(&ctx);
     sph_blake256(&ctx, seed, HASH_BYTES);
     sph_blake256_close(&ctx, cache);
-    for(uint64_t i = 0; i < (items - 1); i++) {
+    for(uint64_t i = 1; i < items; i++) {
         sph_blake256_init(&ctx);
-        sph_blake256(&ctx, cache + (i * (hashwords)), HASH_BYTES);
-        sph_blake256_close(&ctx, cache + (i+1)*hashwords);
+        sph_blake256(&ctx, cache + ((i-1) * (hashwords)), HASH_BYTES);
+        sph_blake256_close(&ctx, cache + i*hashwords);
     }
 
     for(uint32_t rounds = 0; rounds < CACHE_ROUNDS; rounds++) {
@@ -87,13 +88,13 @@ uint32_t* mkcache(unsigned long size, char *seed){
     return cache;
 }
 
-char *calc_dataset_item(char *cache, unsigned long i, unsigned long cache_size) {
+uint32_t *calc_dataset_item(uint32_t *cache, unsigned long i, unsigned long cache_size) {
     sph_blake256_context ctx;
     uint64_t items = cache_size / HASH_BYTES;
     uint64_t hashwords = HASH_BYTES / WORD_BYTES;
     uint32_t *mix = malloc(HASH_BYTES);
-    memcpy(mix, cache + (i % items)*hashwords, 32);
-    std::copy(cacheCache[epoch].begin() + (i % items)*(hashwords), cacheCache[epoch].begin() + (((i % items)*hashwords)+hashwords), mix);
+    memcpy(mix, cache + (i % items)*hashwords, HASH_BYTES);
+    //std::copy(cacheCache[epoch].begin() + (i % items)*(hashwords), cacheCache[epoch].begin() + (((i % items)*hashwords)+hashwords), mix);
     mix[0] ^= i;
     sph_blake256_init(&ctx);
     sph_blake256(&ctx, mix, HASH_BYTES);
@@ -110,11 +111,11 @@ char *calc_dataset_item(char *cache, unsigned long i, unsigned long cache_size) 
     return mix;
 }
 
-char* calc_full_dataset(char *cache, unsigned long dataset_size, unsigned long cache_size) {
-    char *fullset = malloc(dataset_size);
+uint32_t* calc_full_dataset(uint32_t *cache, unsigned long dataset_size, unsigned long cache_size) {
+    uint32_t *fullset = malloc(dataset_size);
     for(int i = 0; i < (floor(dataset_size / HASH_BYTES)); i++){
         char *item = calc_dataset_item(cache, i, cache_size);
-        memcpy(fullset + i*32, item, 32);
+        memcpy(fullset + i*8, item, 32);
         free(item);
     }
     return fullset;
@@ -164,7 +165,7 @@ struct CHashimotoResult {
     uint32_t result[8];
 };
 
-struct CHashimotoResult hashimoto(uint8_t *blockToHash, char *dag, unsigned full_size) {
+struct CHashimotoResult hashimoto(uint8_t *blockToHash, uint32_t *dag, unsigned full_size) {
     uint64_t n = full_size / HASH_BYTES;
     uint64_t mixhashes = MIX_BYTES / HASH_BYTES;
     uint64_t wordhashes = MIX_BYTES / WORD_BYTES;
@@ -172,24 +173,24 @@ struct CHashimotoResult hashimoto(uint8_t *blockToHash, char *dag, unsigned full
     uint32_t hashedHeader[8];
     memcpy(header, blockToHash, 80);
     lyra2re2_hash((char *)blockToHash,(char*)hashedHeader, 80);
-    uint8_t mix[MIX_BYTES];
+    uint32_t mix[MIX_BYTES/sizeof(uint32_t)];
     for(int i = 0; i < (MIX_BYTES / HASH_BYTES);i++) {
-        memcpy(mix + (i * HASH_BYTES), hashedHeader, HASH_BYTES);
+        memcpy(mix + (i * (HASH_BYTES/sizeof(uint32_t))), hashedHeader, HASH_BYTES);
     }
     for(int i = 0; i < ACCESSES; i++) {
-        uint32_t p = fnv(i ^ hashedHeader[0], mix[i % wordhashes]) % (n / mixhashes) * mixhashes;
-        uint8_t newdata[MIX_BYTES];
+        uint32_t p = fnv(i ^ hashedHeader[0], mix[i % (MIX_BYTES/sizeof(uint32_t))]) % (n / mixhashes) * mixhashes;
+        uint32_t newdata[MIX_BYTES/sizeof(uint32_t)];
         for(int j = 0; j < mixhashes; j++) {
-            uint64_t pj = (p+j)*32;
+            uint64_t pj = (p+j)*8;
             char* item = dag + pj;
-            memcpy(newdata + (j * HASH_BYTES), item, HASH_BYTES);
+            memcpy(newdata + (j * 8), item, HASH_BYTES);
         }
-        for(int i = 0; i < MIX_BYTES; i++) {
+        for(int i = 0; i < MIX_BYTES/sizeof(uint32_t); i++) {
             mix[i] = fnv(mix[i], newdata[i]);
         }
     }
-    uint8_t cmix[16];
-    for(int i = 0; i < MIX_BYTES; i += 4) {
+    uint32_t cmix[4];
+    for(int i = 0; i < MIX_BYTES/sizeof(uint32_t); i += 4) {
         cmix[i/4] = fnv(fnv(fnv(mix[i], mix[i+1]), mix[i+2]), mix[i+3]);
     }
     struct CHashimotoResult result;
