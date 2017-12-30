@@ -25,7 +25,7 @@
 #define ACCESSES 64
 #define FNV_PRIME 0x01000193
 
-inline int is_prime(unsigned long number) {
+int is_prime(unsigned long number) {
     if (number <= 1) return false;
     if((number % 2 == 0) && number > 2) return false;
     for(unsigned long i = 3; i < sqrt(number); i += 2) {
@@ -35,7 +35,7 @@ inline int is_prime(unsigned long number) {
     return true;
 }
 
-inline unsigned int fnv(unsigned int v1, unsigned int v2) {
+unsigned int fnv(unsigned int v1, unsigned int v2) {
     return ((v1 * FNV_PRIME)  ^ v2) % (0xffffffff);
 }
 
@@ -113,9 +113,12 @@ uint32_t *calc_dataset_item(uint32_t *cache, unsigned long i, unsigned long cach
 
 uint32_t* calc_full_dataset(uint32_t *cache, unsigned long dataset_size, unsigned long cache_size) {
     uint32_t *fullset = malloc(dataset_size);
-    for(int i = 0; i < (floor(dataset_size / HASH_BYTES)); i++){
+    #pragma omp parallel for
+    for(int i = 0; i < (dataset_size / HASH_BYTES); i++){
         char *item = calc_dataset_item(cache, i, cache_size);
         memcpy(fullset + i*8, item, 32);
+        if(!(i % ((dataset_size / HASH_BYTES)/4)))
+            printf("%u/%lu items finished.", i, (dataset_size/HASH_BYTES));
         free(item);
     }
     return fullset;

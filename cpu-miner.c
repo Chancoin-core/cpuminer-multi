@@ -1167,20 +1167,20 @@ static bool submit_upstream_work(CURL *curl, struct work *work)
 
 		for (i = 0; i < ARRAY_SIZE(work->data); i++)
 			be32enc(work->data + i, work->data[i]);
-		bin2hex(data_str, (unsigned char *)work->data, 80);
+		bin2hex(data_str, (unsigned char *)work->data, 100);
 		if (work->workid) {
 			char *params;
 			val = json_object();
 			json_object_set_new(val, "workid", json_string(work->workid));
 			params = json_dumps(val, 0);
 			json_decref(val);
-			req = (char*) malloc(128 + 2 * 80 + strlen(work->txs) + strlen(params));
+			req = (char*) malloc(128 + 2 * 100 + strlen(work->txs) + strlen(params));
 			sprintf(req,
 				"{\"method\": \"submitblock\", \"params\": [\"%s%s\", %s], \"id\":4}\r\n",
 				data_str, work->txs, params);
 			free(params);
 		} else {
-			req = (char*) malloc(128 + 2 * 80 + strlen(work->txs));
+			req = (char*) malloc(128 + 2 * 100 + strlen(work->txs));
 			sprintf(req,
 				"{\"method\": \"submitblock\", \"params\": [\"%s%s\"], \"id\":4}\r\n",
 				data_str, work->txs);
