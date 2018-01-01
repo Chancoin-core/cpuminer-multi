@@ -201,7 +201,7 @@ struct work;
 unsigned long get_cache_size(unsigned long block_number);
 unsigned long get_full_size(unsigned long block_number);
 uint32_t* mkcache(unsigned long size, char *seed);
-uint32_t* calc_full_dataset(uint32_t *cache, unsigned long dataset_size, unsigned long cache_size);
+uint32_t* calc_full_dataset(uint32_t *cache, unsigned long dataset_size, unsigned long cache_size, int thr_id, uint64_t epoch);
 
 int scanhash_axiom(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);
 int scanhash_bastion(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done);

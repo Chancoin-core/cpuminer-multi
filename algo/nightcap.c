@@ -1,5 +1,6 @@
 #include <memory.h>
 #include <math.h>
+#include <sys/stat.h>
 
 #include "sha3/sph_blake.h"
 #include "sha3/sph_cubehash.h"
@@ -71,18 +72,22 @@ uint32_t* mkcache(unsigned long size, char *seed){
         sph_blake256(&ctx, cache + ((i-1) * (hashwords)), HASH_BYTES);
         sph_blake256_close(&ctx, cache + i*hashwords);
     }
-
-    for(uint32_t rounds = 0; rounds < CACHE_ROUNDS; rounds++) {
-        for(uint32_t i = 0; i < items; i++) {
-            uint32_t item[hashwords];
-            uint64_t current = ((i - 1 + items) % items);
-            uint64_t target = cache[i*hashwords] % items;
-            for(uint64_t byte = 0; byte < hashwords; byte++) {
-                item[byte] = cache[(current * hashwords) + byte] ^ cache[(target * hashwords) + byte];
+    for(uint64_t round = 0; round < CACHE_ROUNDS; round++) {
+        //3 round randmemohash.
+        for(uint64_t i = 0; i < items; i++) {
+            uint64_t target = cache[(i * (HASH_BYTES / sizeof(uint32_t)))] % items;
+            uint64_t mapper = (i - 1 + items) % items;
+            /* Map target onto mapper, hash it,
+             * then replace the current cache item with the 32 byte result. */
+            uint32_t item[HASH_BYTES / sizeof(uint32_t)];
+            for(uint64_t dword = 0; dword < (HASH_BYTES / sizeof(uint32_t)); dword++) {
+                item[dword] = cache[(mapper * (HASH_BYTES / sizeof(uint32_t))) + dword]
+                            ^ cache[(target * (HASH_BYTES / sizeof(uint32_t))) + dword];
             }
             sph_blake256_init(&ctx);
             sph_blake256(&ctx, item, HASH_BYTES);
-            sph_blake256_close(&ctx, cache + (i * hashwords));
+            sph_blake256_close(&ctx, item);
+            memcpy(cache + (i * (HASH_BYTES / sizeof(uint32_t))), item, HASH_BYTES);
         }
     }
     return cache;
@@ -99,10 +104,10 @@ uint32_t *calc_dataset_item(uint32_t *cache, unsigned long i, unsigned long cach
     sph_blake256_init(&ctx);
     sph_blake256(&ctx, mix, HASH_BYTES);
     sph_blake256_close(&ctx, mix);
-    for(uint64_t item = 0; item < DATASET_PARENTS; item++) {
-        uint64_t index = fnv(i ^ item, mix[item % hashwords]);
-        for(uint64_t byte = 0; byte < hashwords; byte++) {
-            mix[byte] = fnv(mix[byte], cache[((index % items)*hashwords) + byte]);
+    for(uint64_t parent = 0; parent < DATASET_PARENTS; parent++) {
+        uint64_t index = fnv(i ^ parent, mix[parent % (HASH_BYTES / sizeof(uint32_t))]) % items;
+        for(uint64_t dword = 0; dword < (HASH_BYTES / sizeof(uint32_t)); dword++) {
+            mix[dword] = fnv(mix[dword], cache[index * (HASH_BYTES / sizeof(uint32_t))]);
         }
     }
     sph_blake256_init(&ctx);
@@ -111,8 +116,21 @@ uint32_t *calc_dataset_item(uint32_t *cache, unsigned long i, unsigned long cach
     return mix;
 }
 
-uint32_t* calc_full_dataset(uint32_t *cache, unsigned long dataset_size, unsigned long cache_size) {
+uint32_t* calc_full_dataset(uint32_t *cache, unsigned long dataset_size, unsigned long cache_size, int thr_id, uint64_t epoch) {
     uint32_t *fullset = malloc(dataset_size);
+    const char n[sizeof(int)*8+1];
+    memset(n, 0, sizeof(int)*8+1);
+    sprintf(n, "%d", epoch);
+    const char *dagn = strcat(n, "dag");
+    struct stat res;
+    if((!stat(dagn, &res) && S_ISREG(res.st_mode))) {
+        if(res.st_size == dataset_size) {
+            FILE* file = fopen(dagn, "rb");
+            fread(fullset, 1, dataset_size, file);
+            fclose(file);
+            return fullset;
+        }
+    }
     #pragma omp parallel for
     for(int i = 0; i < (dataset_size / HASH_BYTES); i++){
         char *item = calc_dataset_item(cache, i, cache_size);
@@ -120,6 +138,11 @@ uint32_t* calc_full_dataset(uint32_t *cache, unsigned long dataset_size, unsigne
         if(!(i % ((dataset_size / HASH_BYTES)/4)))
             printf("%u/%lu items finished.", i, (dataset_size/HASH_BYTES));
         free(item);
+    }
+    if(!thr_id) {
+        FILE* file = fopen(dagn, "wb");
+        fwrite(fullset, 1, dataset_size, file);
+        fclose(file);
     }
     return fullset;
 }
@@ -168,7 +191,7 @@ struct CHashimotoResult {
     uint32_t result[8];
 };
 
-struct CHashimotoResult hashimoto(uint8_t *blockToHash, uint32_t *dag, unsigned full_size) {
+struct CHashimotoResult hashimoto(uint8_t *blockToHash, uint32_t *dag, unsigned full_size, int height) {
     uint64_t n = full_size / HASH_BYTES;
     uint64_t mixhashes = MIX_BYTES / HASH_BYTES;
     uint64_t wordhashes = MIX_BYTES / WORD_BYTES;
@@ -201,7 +224,7 @@ struct CHashimotoResult hashimoto(uint8_t *blockToHash, uint32_t *dag, unsigned 
     uint8_t hash[52];
     memcpy(hash, hashedHeader, 32);
     memcpy(hash + 36, cmix, 16);
-    memcpy(hash + 32, blockToHash + 96, 4);
+    memcpy(hash + 32, &height, 4);
     lyra2re2_hash((char *)hash, (char *)result.result, 52);
     return result;
 
@@ -226,7 +249,7 @@ int scanhash_nightcap(int thr_id, struct work *work, uint32_t max_nonce, uint64_
 	}
 	do {
 		be32enc(&endiandata[19], nonce);
-		struct CHashimotoResult res = hashimoto(endiandata, dag, full_size);
+		struct CHashimotoResult res = hashimoto(endiandata, dag, full_size, work->height);
 		be32enc(&endiandata[20], res.cmix[0]);
 		be32enc(&endiandata[21], res.cmix[1]);
 		be32enc(&endiandata[22], res.cmix[2]);
@@ -247,6 +270,7 @@ int scanhash_nightcap(int thr_id, struct work *work, uint32_t max_nonce, uint64_
 			be32enc(&pdata[21], res.cmix[1]);
 			be32enc(&pdata[22], res.cmix[2]);
 			be32enc(&pdata[23], res.cmix[3]);
+                        be32enc(&pdata[24], work->height);
 			printf("%u\n", nonce);
 			for (int i = 0; i < 32;i++) {
 				printf("%08x", endiandata[i]);
