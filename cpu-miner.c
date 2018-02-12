@@ -2870,7 +2870,7 @@ void parse_arg(int key, char *arg)
 				i = opt_algo = ALGO_JHA;
 			else if (!strcasecmp("lyra2", arg))
 				i = opt_algo = ALGO_LYRA2;
-			else if (!strcasecmp("nightcap", arg))
+			else if (!strcasecmp("cloverhash", arg))
 				i = opt_algo = ALGO_NIGHTCAP;
 			else if (!strcasecmp("lyra2v2", arg))
 				i = opt_algo = ALGO_LYRA2REV2;
