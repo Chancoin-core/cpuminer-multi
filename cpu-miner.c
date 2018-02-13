@@ -1940,19 +1940,6 @@ static void *miner_thread(void *userdata)
 		}
 	}
 
-	if (opt_algo == ALGO_NIGHTCAP) {
-		sph_blake256_context     ctx_blake;
-		for(size_t i = 0; i < (unsigned long)floor(work.height/400.0); i++) {
-			sph_blake256_init(&ctx_blake);
-		        sph_blake256 (&ctx_blake, seed, 32);
-			sph_blake256_close(&ctx_blake, seed);
-		}
-		cache = mkcache(get_cache_size(work.height), seed);
-		applog(LOG_DEBUG, "Cache loaded on thread %d.", thr_id);
-		dag = calc_full_dataset(cache, get_full_size(work.height), get_cache_size(work.height), thr_id, (work.height/400));
-		applog(LOG_DEBUG, "Created datsets on thread %d.", thr_id);
-	}
-
 	if (opt_algo == ALGO_SCRYPT) {
 		scratchbuf = scrypt_buffer_alloc(opt_scrypt_n);
 		if (!scratchbuf) {
@@ -1970,6 +1957,7 @@ static void *miner_thread(void *userdata)
 			exit(1);
 		}
 	}
+	int epoch = -1;
 
 	while (1) {
 		uint64_t hashes_done;
@@ -2117,6 +2105,20 @@ static void *miner_thread(void *userdata)
 		}
 
 		max64 *= (int64_t) thr_hashrates[thr_id];
+		if (opt_algo == ALGO_NIGHTCAP && (epoch != (work.height/400))) {
+			epoch = work.height/400;
+                	sph_blake256_context     ctx_blake;
+                	for(size_t i = 0; i < (unsigned long)floor(work.height/400.0); i++) {
+                	        sph_blake256_init(&ctx_blake);
+                	        sph_blake256 (&ctx_blake, seed, 32);
+                	        sph_blake256_close(&ctx_blake, seed);
+                	}
+                	cache = mkcache(get_cache_size(work.height), seed);
+                	applog(LOG_DEBUG, "Cache loaded on thread %d.", thr_id);
+               		dag = calc_full_dataset(cache, get_full_size(work.height), get_cache_size(work.height), thr_id, (work.height/400));
+        	        applog(LOG_DEBUG, "Created datsets on thread %d.", thr_id);
+	        }
+
 
 		if (max64 <= 0) {
 			switch (opt_algo) {
