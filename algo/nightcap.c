@@ -26,6 +26,14 @@
 #define ACCESSES 64
 #define FNV_PRIME 0x01000193
 
+#include <sys/stat.h>
+
+#if defined(WIN32) || defined(WIN64)
+// Copied from linux libc sys/stat.h:
+#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+#endif
+
 int is_prime(unsigned long number) {
     if (number <= 1) return false;
     if((number % 2 == 0) && number > 2) return false;
@@ -135,7 +143,8 @@ uint32_t* calc_full_dataset(uint32_t *cache, unsigned long dataset_size, unsigne
     for(int i = 0; i < (dataset_size / HASH_BYTES); i++){
         char *item = calc_dataset_item(cache, i, cache_size);
         memcpy(fullset + i*8, item, 32);
-        if(!(i % ((dataset_size / HASH_BYTES)/4)))
+		if (i % 1000 == 0) { printf("\rgenerating dag - %d of %d  ", i, (dataset_size / HASH_BYTES)); }
+		if(!(i % ((dataset_size / HASH_BYTES)/4)))
             printf("%u/%lu items finished.", i, (dataset_size/HASH_BYTES));
         free(item);
     }

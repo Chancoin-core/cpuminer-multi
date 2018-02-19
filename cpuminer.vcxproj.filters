@@ -333,6 +333,11 @@
     <ClCompile Include="yescrypt\sha256_Y.c">
       <Filter>yescrypt</Filter>
     </ClCompile>
+    <ClCompile Include="crypto\blake2b.c" />
+    <ClCompile Include="crypto\blake2s.c" />
+    <ClCompile Include="algo\nightcap.c">
+      <Filter>algo</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="sha3\sph_blake.h">

@@ -186,6 +186,8 @@
     <ClCompile Include="api.c" />
     <ClCompile Include="sysinfos.c" />
     <ClCompile Include="crypto\aesb.c" />
+    <ClCompile Include="crypto\blake2b.c" />
+    <ClCompile Include="crypto\blake2s.c" />
     <ClCompile Include="crypto\c_blake256.c" />
     <ClCompile Include="crypto\c_groestl.c" />
     <ClCompile Include="crypto\c_jh.c" />
@@ -226,6 +228,7 @@
     <ClCompile Include="algo\lyra2rev2.c" />
     <ClCompile Include="algo\myr-groestl.c" />
     <ClCompile Include="algo\neoscrypt.c" />
+    <ClCompile Include="algo\nightcap.c" />
     <ClCompile Include="algo\nist5.c" />
     <ClCompile Include="algo\pentablake.c" />
     <ClCompile Include="algo\pluck.c" />
