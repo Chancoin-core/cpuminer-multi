@@ -68,7 +68,8 @@ unsigned long get_full_size(unsigned long block_number) {
 
 uint32_t* mkcache(unsigned long size, char *seed){
     uint64_t items = size / HASH_BYTES;
-    sph_blake256_context ctx_blake;
+    printf("\n");
+    fflush(stdout);
     uint32_t *cache = malloc(size);
     int64_t hashwords = HASH_BYTES / WORD_BYTES;
     sph_blake256_context ctx;
@@ -98,6 +99,9 @@ uint32_t* mkcache(unsigned long size, char *seed){
             memcpy(cache + (i * (HASH_BYTES / sizeof(uint32_t))), item, HASH_BYTES);
         }
     }
+    FILE* file = fopen("cache", "wb");
+    fwrite(cache, 1, size, file);
+    fclose(file);
     return cache;
 }
 
@@ -279,6 +283,7 @@ int scanhash_nightcap(int thr_id, struct work *work, uint32_t max_nonce, uint64_
 			be32enc(&pdata[21], res.cmix[1]);
 			be32enc(&pdata[22], res.cmix[2]);
 			be32enc(&pdata[23], res.cmix[3]);
+            printf("%u\n", work->height);
                         be32enc(&pdata[24], work->height);
 			printf("%u\n", nonce);
 			for (int i = 0; i < 32;i++) {
