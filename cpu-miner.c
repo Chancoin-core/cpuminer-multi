@@ -2000,6 +2000,10 @@ static void *miner_thread(void *userdata)
 				sleep(1);
 			}
 
+            if (opt_algo == ALGO_NIGHTCAP) {
+                work.height = stratum.bloc_height;
+            }
+
 			pthread_mutex_lock(&g_work_lock);
 
 			// to clean: is g_work loaded before the memcmp ?
@@ -2058,7 +2062,10 @@ static void *miner_thread(void *userdata)
 			nonceptr[1] += 0x10;
 			nonceptr[1] |= thr_id;
 			//applog_hex(nonceptr, 8);
-		}
+        } else if(opt_algo == ALGO_NIGHTCAP) {
+            if (have_stratum && strcmp(stratum.job.job_id, work.job_id))
+                continue;
+        }
 
 		// prevent scans before a job is received
 		// beware, some testnet (decred) are using version 0
@@ -2105,17 +2112,25 @@ static void *miner_thread(void *userdata)
 		}
 
 		max64 *= (int64_t) thr_hashrates[thr_id];
-		if (opt_algo == ALGO_NIGHTCAP && (epoch != (work.height/400))) {
-			epoch = work.height/400;
+        printf("%i\n",stratum.work.height);
+        int height = (work.height < stratum.bloc_height) ? stratum.bloc_height : work.height;
+        work.height = height;
+        if (opt_algo == ALGO_NIGHTCAP && (epoch != (height/400))) {
+            epoch = height/400;
                 	sph_blake256_context     ctx_blake;
-                	for(size_t i = 0; i < (unsigned long)floor(work.height/400.0); i++) {
+                    for(size_t i = 0; i < (unsigned long)floor(height/400.0); i++) {
                 	        sph_blake256_init(&ctx_blake);
                 	        sph_blake256 (&ctx_blake, seed, 32);
                 	        sph_blake256_close(&ctx_blake, seed);
+                            for(uint32_t i = 0; i < 8; i++) {
+                                printf("%08x", ((unsigned int*)seed)[i]);
+                            }
+                            printf("\n");
+                            fflush(stdout);
                 	}
-                	cache = mkcache(get_cache_size(work.height), seed);
+                    cache = mkcache(get_cache_size(height), seed);
                 	applog(LOG_DEBUG, "Cache loaded on thread %d.", thr_id);
-               		dag = calc_full_dataset(cache, get_full_size(work.height), get_cache_size(work.height), thr_id, (work.height/400));
+                    dag = calc_full_dataset(cache, get_full_size(height), get_cache_size(height), thr_id, (height/400));
         	        applog(LOG_DEBUG, "Created datsets on thread %d.", thr_id);
 	        }
 
