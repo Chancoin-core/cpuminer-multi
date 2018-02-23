@@ -58,7 +58,7 @@ unsigned long get_cache_size(unsigned long block_number) {
 }
 
 unsigned long get_full_size(unsigned long block_number) {
-    unsigned long sz = DATASET_BYTES_INIT + (DATASET_BYTES_GROWTH * round(sqrt(6*floor(((float)block_number / (float)EPOCH_LENGTH)))));
+    unsigned long sz = DATASET_BYTES_INIT + (DATASET_BYTES_GROWTH * round(sqrt(6*(block_number / EPOCH_LENGTH))));
     sz -= MIX_BYTES;
     while (!is_prime(sz / MIX_BYTES)) {
         sz -= 2 * MIX_BYTES;
